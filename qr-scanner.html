@@ -4,8 +4,7 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
 <title>QR Scanner</title>
-<!-- ZXing JS - reliable QR decoder, no library camera issues -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/zxing-js/0.19.1/index.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet"/>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
@@ -16,17 +15,15 @@
   --fh:'Syne',sans-serif;--fm:'DM Mono',monospace;
 }
 body{background:var(--bg);color:var(--text);font-family:var(--fm);min-height:100vh;overflow-x:hidden}
-
 .topbar{background:var(--card);border-bottom:1px solid var(--border);padding:14px 20px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:50}
 .logo{font-family:var(--fh);font-size:18px;font-weight:800}
 .logo span{color:var(--accent)}
 .live-badge{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--green)}
 .live-dot{width:7px;height:7px;border-radius:50%;background:var(--green);animation:pulse 1.5s infinite}
-
-.cam-wrap{position:relative;background:#000;width:100%;max-height:70vw;overflow:hidden;aspect-ratio:1}
-#camView{width:100%;height:100%;object-fit:cover;display:block;transform:scaleX(1)}
+.cam-wrap{position:relative;background:#000;width:100%;aspect-ratio:1;max-height:70vw;overflow:hidden}
+#camView{width:100%;height:100%;object-fit:cover;display:block}
 #camView.mirror{transform:scaleX(-1)}
-
+#snapCanvas{display:none}
 .scan-frame{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:200px;height:200px;pointer-events:none;z-index:10}
 .scan-frame::before,.scan-frame::after{content:'';position:absolute;width:36px;height:36px;border-color:var(--accent);border-style:solid}
 .scan-frame::before{top:0;left:0;border-width:3px 0 0 3px;border-radius:6px 0 0 0}
@@ -34,23 +31,18 @@ body{background:var(--bg);color:var(--text);font-family:var(--fm);min-height:100
 .sf-tr,.sf-bl{position:absolute;width:36px;height:36px;border-color:var(--accent);border-style:solid}
 .sf-tr{top:0;right:0;border-width:3px 3px 0 0;border-radius:0 6px 0 0}
 .sf-bl{bottom:0;left:0;border-width:0 0 3px 3px;border-radius:0 0 0 6px}
-
-.laser{position:absolute;left:calc(50% - 90px);top:50%;width:180px;height:2px;background:linear-gradient(90deg,transparent,var(--accent),transparent);border-radius:2px;animation:laserScan 2s ease-in-out infinite;box-shadow:0 0 8px var(--accent);z-index:11;pointer-events:none;display:none}
+.laser{position:absolute;left:calc(50% - 90px);width:180px;height:2px;background:linear-gradient(90deg,transparent,var(--accent),transparent);border-radius:2px;animation:laserScan 2s ease-in-out infinite;z-index:11;pointer-events:none;display:none}
 @keyframes laserScan{0%,100%{top:calc(50% - 90px)}50%{top:calc(50% + 90px)}}
-
-.cam-status{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center;z-index:5;color:var(--muted);font-size:12px;padding:20px}
+.cam-status{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center;z-index:5;color:var(--muted);font-size:12px;padding:20px;width:90%}
 .cam-status .cs-icon{font-size:32px;margin-bottom:8px}
-
-.flip-btn{position:absolute;bottom:14px;right:14px;z-index:20;background:rgba(0,0,0,0.6);border:1px solid rgba(255,255,255,0.15);color:#fff;border-radius:50%;width:42px;height:42px;font-size:18px;display:flex;align-items:center;justify-content:center;cursor:pointer;backdrop-filter:blur(8px);transition:background 0.2s}
-.flip-btn:hover{background:rgba(0,229,255,0.2)}
-
-/* Permission Error Box */
+.flip-btn{position:absolute;bottom:14px;right:14px;z-index:20;background:rgba(0,0,0,0.6);border:1px solid rgba(255,255,255,0.15);color:#fff;border-radius:50%;width:42px;height:42px;font-size:18px;display:flex;align-items:center;justify-content:center;cursor:pointer}
+.flash{position:absolute;inset:0;background:rgba(0,229,255,0.2);z-index:12;opacity:0;pointer-events:none;transition:opacity 0.15s}
+.flash.on{opacity:1}
 .perm-box{margin:16px;background:#1a0a0a;border:1px solid var(--red);border-radius:16px;padding:16px;display:none}
 .perm-box .pb-title{color:var(--red);font-family:var(--fh);font-size:14px;margin-bottom:8px}
-.perm-box ol{padding-left:18px;font-size:12px;color:var(--muted);line-height:2}
+.perm-box ol{padding-left:18px;font-size:12px;color:var(--muted);line-height:2.2}
 .perm-box .pb-retry{margin-top:12px;background:var(--red);color:#fff;border:none;border-radius:10px;padding:10px 18px;font-family:var(--fm);font-size:12px;cursor:pointer;font-weight:700}
-
-.result{margin:0 16px;margin-top:-1px;background:var(--card);border:1px solid var(--border);border-radius:0 0 20px 20px;padding:0;overflow:hidden;transition:all 0.4s cubic-bezier(0.34,1.56,0.64,1)}
+.result{margin:0 16px;margin-top:-1px;background:var(--card);border:1px solid var(--border);border-radius:0 0 20px 20px;overflow:hidden}
 .result.success{border-color:var(--green)}.result.error{border-color:var(--red)}.result.notfound{border-color:var(--yellow)}
 .result-inner{padding:18px 20px}
 .r-status{display:flex;align-items:center;gap:10px;margin-bottom:14px}
@@ -67,27 +59,21 @@ body{background:var(--bg);color:var(--text);font-family:var(--fm);min-height:100
 .rf.time .val{font-size:12px;color:var(--muted)}
 .waiting{padding:20px;text-align:center;color:var(--muted);font-size:13px;border-top:1px solid var(--border)}
 .waiting .w-icon{font-size:28px;margin-bottom:6px}
-
 .bottom{padding:16px;display:flex;gap:10px}
 .btn{flex:1;padding:13px;border-radius:12px;border:none;font-family:var(--fm);font-size:13px;font-weight:500;cursor:pointer;transition:all 0.2s}
 .btn-start{background:var(--accent);color:#000;font-weight:700}
-.btn-start:hover{filter:brightness(1.1);transform:translateY(-1px)}
 .btn-stop{background:var(--card);color:var(--text);border:1px solid var(--border)}
-.btn-stop:hover{border-color:var(--red);color:var(--red)}
-.btn:disabled{opacity:0.35;cursor:not-allowed;transform:none!important;filter:none!important}
-
+.btn:disabled{opacity:0.35;cursor:not-allowed}
 .setup{margin:16px;background:var(--card);border:1px solid var(--border);border-radius:16px;padding:16px}
 .setup-label{font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--accent);margin-bottom:8px;display:block}
-.setup input{width:100%;background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:11px 14px;color:var(--text);font-family:var(--fm);font-size:12px;outline:none;transition:border-color 0.2s}
+.setup input{width:100%;background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:11px 14px;color:var(--text);font-family:var(--fm);font-size:12px;outline:none}
 .setup input:focus{border-color:var(--accent)}
 .setup input::placeholder{color:var(--muted)}
 .setup-hint{font-size:10px;color:var(--muted);margin-top:5px;line-height:1.5}
-
 .log-wrap{margin:0 16px 80px;background:var(--card);border:1px solid var(--border);border-radius:16px;overflow:hidden}
 .log-head{padding:13px 18px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center}
 .log-title{font-family:var(--fh);font-size:13px;font-weight:700}
 .log-clr{font-size:11px;color:var(--muted);cursor:pointer}
-.log-clr:hover{color:var(--red)}
 #logList{max-height:220px;overflow-y:auto}
 .log-empty{text-align:center;color:var(--muted);font-size:12px;padding:24px}
 .li{display:grid;grid-template-columns:28px 1fr auto;align-items:center;gap:8px;padding:10px 16px;border-bottom:1px solid var(--border);font-size:12px}
@@ -97,14 +83,10 @@ body{background:var(--bg);color:var(--text);font-family:var(--fm);min-height:100
 .li-name{font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .li-size{font-size:10px;color:var(--purple)}
 .li-time{font-size:10px;color:var(--muted);text-align:right}
-
-.toast{position:fixed;bottom:24px;left:16px;right:16px;max-width:400px;margin:0 auto;background:var(--card);border-radius:14px;padding:13px 16px;display:flex;align-items:center;gap:10px;font-size:13px;transform:translateY(80px);opacity:0;transition:all 0.35s cubic-bezier(0.34,1.56,0.64,1);z-index:100;border:1px solid var(--border);box-shadow:0 -4px 32px rgba(0,0,0,0.5)}
+.toast{position:fixed;bottom:24px;left:16px;right:16px;max-width:400px;margin:0 auto;background:var(--card);border-radius:14px;padding:13px 16px;display:flex;align-items:center;gap:10px;font-size:13px;transform:translateY(80px);opacity:0;transition:all 0.35s cubic-bezier(0.34,1.56,0.64,1);z-index:100;border:1px solid var(--border)}
 .toast.show{transform:translateY(0);opacity:1}
 .toast.s{border-color:var(--green)}.toast.e{border-color:var(--red)}.toast.l{border-color:var(--yellow)}
-
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:0.3}}
-#logList::-webkit-scrollbar{width:3px}
-#logList::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
 </style>
 </head>
 <body>
@@ -120,28 +102,28 @@ body{background:var(--bg);color:var(--text);font-family:var(--fm);min-height:100
     <div>Start dabao, camera khulega</div>
   </div>
   <video id="camView" autoplay muted playsinline></video>
+  <canvas id="snapCanvas"></canvas>
   <div class="scan-frame"><div class="sf-tr"></div><div class="sf-bl"></div></div>
   <div class="laser" id="laser"></div>
-  <div class="flip-btn" onclick="flipCam()" title="Camera flip">⟳</div>
+  <div class="flash" id="flash"></div>
+  <div class="flip-btn" onclick="flipCam()">⟳</div>
 </div>
 
-<!-- Camera Permission Error Box -->
 <div class="perm-box" id="permBox">
   <div class="pb-title">❌ Camera Permission Nahi Mili</div>
   <ol>
-    <li>Browser ke address bar mein 🔒 icon tap karo</li>
-    <li>"Camera" permission → <strong>Allow</strong> karo</li>
-    <li>Page reload karo (⟳)</li>
-    <li>Agar Chrome hai → Settings → Site Settings → Camera → Allow</li>
+    <li>Browser address bar mein 🔒 tap karo</li>
+    <li>Camera → Allow karo</li>
+    <li>Page reload karo</li>
   </ol>
-  <button class="pb-retry" onclick="retryCam()">🔄 Dobara Try Karo</button>
+  <button class="pb-retry" onclick="startScan()">🔄 Dobara Try Karo</button>
 </div>
 
 <div class="result" id="result">
   <div class="waiting">
     <div class="w-icon">📦</div>
     <div>Camera ke saamne QR code rakho</div>
-    <div style="font-size:11px;margin-top:4px;color:var(--muted)">Scan hote hi Name aur Size dikhega</div>
+    <div style="font-size:11px;margin-top:4px;color:var(--muted)">Scan hote hi result dikhega</div>
   </div>
 </div>
 
@@ -151,12 +133,9 @@ body{background:var(--bg);color:var(--text);font-family:var(--fm);min-height:100
 </div>
 
 <div class="setup">
-  <span class="setup-label">⚙ Apps Script URL (ek baar daalo, save rahega)</span>
+  <span class="setup-label">⚙ Apps Script URL</span>
   <input id="gsUrl" placeholder="https://script.google.com/macros/s/YOUR_ID/exec"/>
-  <div class="setup-hint">
-    ➊ script.google.com → gs.js paste karo → Deploy → Web App → URL copy karo<br>
-    ➋ Woh URL yahan paste karo → bas ho gaya!
-  </div>
+  <div class="setup-hint">Apna deployed Apps Script URL yahan paste karo</div>
 </div>
 
 <div class="log-wrap">
@@ -169,315 +148,217 @@ body{background:var(--bg);color:var(--text);font-family:var(--fm);min-height:100
 
 <div class="toast" id="toast">
   <span id="ti" style="font-size:18px"></span>
-  <div><div id="tt" style="font-weight:500;margin-bottom:2px"></div><div id="ts" style="font-size:11px;color:var(--muted)"></div></div>
+  <div>
+    <div id="tt" style="font-weight:500;margin-bottom:2px"></div>
+    <div id="ts" style="font-size:11px;color:var(--muted)"></div>
+  </div>
 </div>
 
 <script>
-// ── State ──────────────────────────────
-let stream = null;
-let scanning = false;
-let facingMode = 'environment'; // rear cam by default
-let busy = false;
-let scanLoop = null;
-let codeReader = null;
-let logs = JSON.parse(localStorage.getItem('qlogs') || '[]');
+let stream=null, scanning=false, facingMode='environment', busy=false, rafId=null;
+let logs=JSON.parse(localStorage.getItem('qlogs')||'[]');
 
-const video = document.getElementById('camView');
+const video  = document.getElementById('camView');
+const canvas = document.getElementById('snapCanvas');
+const ctx    = canvas.getContext('2d',{willReadFrequently:true});
 
-// ── Toast ──────────────────────────────
+// Toast
 let tT;
-function toast(type, title, sub = '') {
+function toast(type,title,sub=''){
   clearTimeout(tT);
-  document.getElementById('ti').textContent = { s: '✅', e: '❌', l: '⏳' }[type] || 'ℹ️';
-  document.getElementById('tt').textContent = title;
-  document.getElementById('ts').textContent = sub;
-  const el = document.getElementById('toast');
-  el.className = 'toast ' + type + ' show';
-  if (type !== 'l') tT = setTimeout(() => el.classList.remove('show'), 4000);
+  document.getElementById('ti').textContent={s:'✅',e:'❌',l:'⏳'}[type]||'ℹ️';
+  document.getElementById('tt').textContent=title;
+  document.getElementById('ts').textContent=sub;
+  const el=document.getElementById('toast');
+  el.className='toast '+type+' show';
+  if(type!=='l') tT=setTimeout(()=>el.classList.remove('show'),4000);
 }
 
-// ── Result Card ────────────────────────
-function showResult(type, data) {
-  const el = document.getElementById('result');
-  el.className = 'result ' + type;
-  if (type === 'success') {
-    el.innerHTML = `<div class="result-inner">
-      <div class="r-status">
-        <span class="r-icon">✅</span>
-        <div><div class="r-label">Product Mil Gaya!</div><div class="r-sublabel">Sheet mein Scanned ✓ save ho gaya</div></div>
+// Flash
+function doFlash(){
+  const f=document.getElementById('flash');
+  f.classList.add('on');
+  setTimeout(()=>f.classList.remove('on'),200);
+}
+
+// Result
+function showResult(type,data){
+  const el=document.getElementById('result');
+  el.className='result '+type;
+  if(type==='success'){
+    el.innerHTML=`<div class="result-inner">
+      <div class="r-status"><span class="r-icon">✅</span>
+        <div><div class="r-label">Product Mil Gaya!</div><div class="r-sublabel">Sheet mein save ho gaya ✓</div></div>
       </div>
       <div class="r-fields">
         <div class="rf name"><div class="key">Product Name</div><div class="val">${data.name}</div></div>
         <div class="rf size"><div class="key">Size</div><div class="val">${data.size}</div></div>
         <div class="rf id"><div class="key">Product ID</div><div class="val">${data.productId}</div></div>
-        <div class="rf time"><div class="key">Scan Time</div><div class="val">${data.scannedAt}</div></div>
-      </div>
-    </div>`;
-  } else if (type === 'notfound') {
-    el.innerHTML = `<div class="result-inner">
-      <div class="r-status"><span class="r-icon">⚠️</span>
-        <div><div class="r-label">Product Nahi Mila</div><div class="r-sublabel">${data.id} sheet mein nahi hai</div></div>
-      </div>
-    </div>`;
+        <div class="rf time"><div class="key">Scan Time</div><div class="val">${data.scannedAt||'—'}</div></div>
+      </div></div>`;
+  } else if(type==='notfound'){
+    el.innerHTML=`<div class="result-inner"><div class="r-status"><span class="r-icon">⚠️</span>
+      <div><div class="r-label">Product Nahi Mila</div><div class="r-sublabel">${data.id} sheet mein nahi hai</div></div>
+    </div></div>`;
   } else {
-    el.innerHTML = `<div class="result-inner">
-      <div class="r-status"><span class="r-icon">❌</span>
-        <div><div class="r-label">Error Aaya</div><div class="r-sublabel">${data.msg}</div></div>
-      </div>
-    </div>`;
+    el.innerHTML=`<div class="result-inner"><div class="r-status"><span class="r-icon">❌</span>
+      <div><div class="r-label">Error Aaya</div><div class="r-sublabel">${data.msg}</div></div>
+    </div></div>`;
   }
 }
-
-function resetResult() {
-  const el = document.getElementById('result');
-  el.className = 'result';
-  el.innerHTML = `<div class="waiting"><div class="w-icon">📦</div><div>Camera ke saamne QR code rakho</div><div style="font-size:11px;margin-top:4px;color:var(--muted)">Scan hote hi Name aur Size dikhega</div></div>`;
+function resetResult(){
+  const el=document.getElementById('result');
+  el.className='result';
+  el.innerHTML=`<div class="waiting"><div class="w-icon">📦</div><div>Camera ke saamne QR code rakho</div>
+  <div style="font-size:11px;margin-top:4px;color:var(--muted)">Scan hote hi result dikhega</div></div>`;
 }
 
-// ── Log ────────────────────────────────
-function renderLog() {
-  const el = document.getElementById('logList');
-  if (!logs.length) { el.innerHTML = '<div class="log-empty">Koi scan nahi hua abhi…</div>'; return; }
-  el.innerHTML = logs.slice().reverse().map(d => `
+// Log
+function renderLog(){
+  const el=document.getElementById('logList');
+  if(!logs.length){el.innerHTML='<div class="log-empty">Koi scan nahi hua abhi…</div>';return;}
+  el.innerHTML=logs.slice().reverse().map(d=>`
     <div class="li ${d.t}">
-      <span class="li-icon">${d.t === 'ok' ? '✅' : d.t === 'nf' ? '⚠️' : '❌'}</span>
-      <div><div class="li-name">${d.name || d.id}</div><div class="li-size">${d.size || d.id}</div></div>
+      <span class="li-icon">${d.t==='ok'?'✅':d.t==='nf'?'⚠️':'❌'}</span>
+      <div><div class="li-name">${d.name||d.id}</div><div class="li-size">${d.size||d.id}</div></div>
       <span class="li-time">${d.time}</span>
     </div>`).join('');
 }
-function addLog(t, id, name = '', size = '') {
-  const time = new Date().toLocaleTimeString('hi-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-  logs.push({ t, id, name, size, time });
-  localStorage.setItem('qlogs', JSON.stringify(logs));
+function addLog(t,id,name='',size=''){
+  const time=new Date().toLocaleTimeString('hi-IN',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+  logs.push({t,id,name,size,time});
+  localStorage.setItem('qlogs',JSON.stringify(logs));
   renderLog();
 }
-function clearLog() { logs = []; localStorage.removeItem('qlogs'); renderLog(); }
+function clearLog(){logs=[];localStorage.removeItem('qlogs');renderLog();}
 renderLog();
 
-// ── Beep ───────────────────────────────
-function beep(ok) {
-  try {
-    const c = new AudioContext(), o = c.createOscillator(), g = c.createGain();
-    o.connect(g); g.connect(c.destination);
-    o.frequency.value = ok ? 880 : 300; o.type = 'sine';
-    g.gain.setValueAtTime(0.3, c.currentTime);
-    g.gain.exponentialRampToValueAtTime(0.001, c.currentTime + 0.35);
-    o.start(); o.stop(c.currentTime + 0.35);
-  } catch (e) {}
+// Beep
+function beep(ok){
+  try{
+    const c=new AudioContext(),o=c.createOscillator(),g=c.createGain();
+    o.connect(g);g.connect(c.destination);
+    o.frequency.value=ok?880:300;o.type='sine';
+    g.gain.setValueAtTime(0.3,c.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001,c.currentTime+0.35);
+    o.start();o.stop(c.currentTime+0.35);
+  }catch(e){}
 }
 
-// ── API Call ───────────────────────────
-async function handleScan(decoded) {
-  if (busy) return;
-  busy = true;
-  setTimeout(() => busy = false, 3000);
+// API
+async function handleScan(decoded){
+  if(busy) return;
+  busy=true;
+  doFlash();
 
-  const url = document.getElementById('gsUrl').value.trim();
-  if (!url) { toast('e', 'URL Daalo!', 'Neeche Apps Script URL paste karo pehle'); busy = false; return; }
+  const url=document.getElementById('gsUrl').value.trim();
+  if(!url){toast('e','URL Daalo!','Neeche Apps Script URL paste karo');busy=false;return;}
 
-  toast('l', 'Scan ho raha hai…', decoded.trim());
+  toast('l','Sending…',decoded.trim());
 
-  try {
-    const res = await fetch(`${url}?action=scan&productId=${encodeURIComponent(decoded.trim())}`);
-    const data = await res.json();
-    if (data.status === 'success') {
-      beep(true); showResult('success', data);
-      toast('s', data.name + ' (' + data.size + ')', 'Sheet update ✓');
-      addLog('ok', data.productId, data.name, data.size);
-    } else if (data.status === 'notfound') {
-      beep(false); showResult('notfound', { id: decoded.trim() });
-      toast('e', 'Nahi Mila!', decoded.trim() + ' sheet mein nahi hai');
-      addLog('nf', decoded.trim());
+  try{
+    const res=await fetch(`${url}?action=scan&productId=${encodeURIComponent(decoded.trim())}`);
+    const data=await res.json();
+    if(data.status==='success'){
+      beep(true);showResult('success',data);
+      toast('s',data.name+' ('+data.size+')','Sheet update ✓');
+      addLog('ok',data.productId,data.name,data.size);
+    } else if(data.status==='notfound'){
+      beep(false);showResult('notfound',{id:decoded.trim()});
+      toast('e','Nahi Mila!',decoded.trim());
+      addLog('nf',decoded.trim());
     } else {
-      beep(false); showResult('error', { msg: data.message });
-      toast('e', 'Error!', data.message);
-      addLog('fl', decoded.trim());
+      beep(false);showResult('error',{msg:data.message});
+      toast('e','Error!',data.message);
+      addLog('fl',decoded.trim());
     }
-  } catch (err) {
-    beep(false); showResult('error', { msg: err.message });
-    toast('e', 'Network Error!', 'URL sahi hai? CORS issue?');
-    addLog('fl', decoded.trim());
+  }catch(err){
+    beep(false);showResult('error',{msg:err.message});
+    toast('e','Network Error!',err.message);
+    addLog('fl',decoded.trim());
   }
+  setTimeout(()=>busy=false,2500);
 }
 
-// ── ZXing QR Decode Loop ───────────────
-function startDecodeLoop() {
-  // Use ZXing BrowserQRCodeReader if available, else canvas fallback
-  if (window.ZXing) {
-    codeReader = new ZXing.BrowserQRCodeReader();
-    codeReader.decodeFromVideoElement(video, (result, err) => {
-      if (result) handleScan(result.getText());
-    }).catch(() => {});
-  } else {
-    // Canvas-based fallback decode loop (jsQR not loaded, basic approach)
-    startCanvasDecode();
+// jsQR decode loop — runs every animation frame
+function tick(){
+  if(!scanning){return;}
+  if(video.readyState===video.HAVE_ENOUGH_DATA && video.videoWidth>0){
+    canvas.width=video.videoWidth;
+    canvas.height=video.videoHeight;
+    ctx.drawImage(video,0,0,canvas.width,canvas.height);
+    const img=ctx.getImageData(0,0,canvas.width,canvas.height);
+    const code=jsQR(img.data,img.width,img.height,{inversionAttempts:'dontInvert'});
+    if(code && code.data) handleScan(code.data);
   }
+  rafId=requestAnimationFrame(tick);
 }
 
-function startCanvasDecode() {
-  const canvas = document.createElement('canvas');
-  const ctx = canvas.getContext('2d');
+// Start
+async function startScan(){
+  document.getElementById('permBox').style.display='none';
+  document.getElementById('camStatus').innerHTML='<div class="cs-icon">⏳</div><div>Camera khul raha hai…</div>';
+  document.getElementById('camStatus').style.display='block';
+  stopStream();
 
-  function tick() {
-    if (!scanning) return;
-    if (video.readyState === video.HAVE_ENOUGH_DATA) {
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
-      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-      // Try ZXing decode on canvas
-      if (window.ZXing) {
-        try {
-          const hints = new Map();
-          const reader = new ZXing.MultiFormatReader();
-          hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [ZXing.BarcodeFormat.QR_CODE]);
-          reader.setHints(hints);
-          const luminance = new ZXing.HTMLCanvasElementLuminanceSource(canvas);
-          const bitmap = new ZXing.BinaryBitmap(new ZXing.HybridBinarizer(luminance));
-          const result = reader.decode(bitmap);
-          if (result) { handleScan(result.getText()); return; }
-        } catch (e) {}
-      }
-    }
-    scanLoop = requestAnimationFrame(tick);
-  }
-  scanLoop = requestAnimationFrame(tick);
-}
-
-// ── MAIN: Start Camera ─────────────────
-async function startScan() {
-  document.getElementById('permBox').style.display = 'none';
-  document.getElementById('camStatus').innerHTML = '<div class="cs-icon">⏳</div><div>Camera khul raha hai…</div>';
-
-  // Stop any existing stream
-  await stopStream();
-
-  const constraints = {
-    video: {
-      facingMode: { ideal: facingMode },
-      width: { ideal: 1280 },
-      height: { ideal: 720 }
-    },
-    audio: false
-  };
-
-  try {
-    stream = await navigator.mediaDevices.getUserMedia(constraints);
-    video.srcObject = stream;
-    // Mirror only for front cam
-    video.className = facingMode === 'user' ? 'mirror' : '';
-
-    await new Promise((resolve, reject) => {
-      video.onloadedmetadata = resolve;
-      video.onerror = reject;
-      setTimeout(resolve, 3000); // fallback
+  try{
+    stream=await navigator.mediaDevices.getUserMedia({
+      video:{facingMode:{ideal:facingMode},width:{ideal:1280},height:{ideal:720}},
+      audio:false
     });
-
+    video.srcObject=stream;
+    video.className=facingMode==='user'?'mirror':'';
+    await new Promise(res=>{video.onloadedmetadata=res;setTimeout(res,3000);});
     await video.play();
-
-    document.getElementById('camStatus').style.display = 'none';
-    document.getElementById('laser').style.display = 'block';
-    document.getElementById('startBtn').disabled = true;
-    document.getElementById('stopBtn').disabled = false;
-    scanning = true;
+    document.getElementById('camStatus').style.display='none';
+    document.getElementById('laser').style.display='block';
+    document.getElementById('startBtn').disabled=true;
+    document.getElementById('stopBtn').disabled=false;
+    scanning=true;
     resetResult();
-    startDecodeLoop();
-
-  } catch (err) {
-    console.error('Camera error:', err);
-    document.getElementById('camStatus').style.display = 'none';
-    showCameraError(err);
+    rafId=requestAnimationFrame(tick);
+    toast('s','Camera Ready!','QR code saamne rakho');
+  }catch(err){
+    document.getElementById('camStatus').style.display='none';
+    document.getElementById('permBox').style.display='block';
+    const msg=err.name==='NotAllowedError'?'Camera permission block hai':
+               err.name==='NotFoundError'?'Camera nahi mila':
+               err.name==='NotReadableError'?'Camera busy hai, doosra app band karo':
+               err.message;
+    toast('e','Camera Error!',msg);
   }
 }
 
-function showCameraError(err) {
-  const permBox = document.getElementById('permBox');
-  permBox.style.display = 'block';
-
-  let msg = err.message || err.toString();
-  if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
-    toast('e', 'Camera Blocked!', 'Permission allow karni hogi');
-  } else if (err.name === 'NotFoundError') {
-    toast('e', 'Camera Nahi Mila!', 'Device mein camera hai?');
-  } else if (err.name === 'NotReadableError') {
-    toast('e', 'Camera Use Mein Hai!', 'Doosra app band karo, retry karo');
-  } else if (err.name === 'OverconstrainedError') {
-    // Try again with simpler constraints
-    toast('l', 'Retry ho raha hai…', 'Simple mode mein try kar raha hoon');
-    retrySimple();
-    return;
-  } else {
-    toast('e', 'Camera Error!', msg);
-  }
+function stopStream(){
+  scanning=false;
+  if(rafId){cancelAnimationFrame(rafId);rafId=null;}
+  if(stream){stream.getTracks().forEach(t=>t.stop());stream=null;}
+  video.srcObject=null;
 }
-
-async function retrySimple() {
-  try {
-    stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
-    video.srcObject = stream;
-    await video.play();
-    document.getElementById('camStatus').style.display = 'none';
-    document.getElementById('laser').style.display = 'block';
-    document.getElementById('startBtn').disabled = true;
-    document.getElementById('stopBtn').disabled = false;
-    scanning = true;
-    resetResult();
-    startDecodeLoop();
-    toast('s', 'Camera Khul Gaya!', 'Simple mode mein chal raha hai');
-  } catch (err) {
-    showCameraError(err);
-  }
-}
-
-function retryCam() {
-  startScan();
-}
-
-// ── Stop Camera ────────────────────────
-async function stopStream() {
-  scanning = false;
-  if (scanLoop) { cancelAnimationFrame(scanLoop); scanLoop = null; }
-  if (codeReader) { try { codeReader.reset(); } catch (e) {} codeReader = null; }
-  if (stream) {
-    stream.getTracks().forEach(t => t.stop());
-    stream = null;
-  }
-  video.srcObject = null;
-}
-
-async function stopScan() {
-  await stopStream();
-  document.getElementById('startBtn').disabled = false;
-  document.getElementById('stopBtn').disabled = true;
-  document.getElementById('laser').style.display = 'none';
-  document.getElementById('camStatus').style.display = 'block';
-  document.getElementById('camStatus').innerHTML = '<div class="cs-icon">📷</div><div>Start dabao, camera khulega</div>';
+function stopScan(){
+  stopStream();
+  document.getElementById('startBtn').disabled=false;
+  document.getElementById('stopBtn').disabled=true;
+  document.getElementById('laser').style.display='none';
+  document.getElementById('camStatus').innerHTML='<div class="cs-icon">📷</div><div>Start dabao, camera khulega</div>';
+  document.getElementById('camStatus').style.display='block';
   resetResult();
 }
-
-// ── Flip Camera ────────────────────────
-async function flipCam() {
-  facingMode = facingMode === 'environment' ? 'user' : 'environment';
-  if (scanning) {
-    await stopStream();
-    await startScan();
-  }
+async function flipCam(){
+  facingMode=facingMode==='environment'?'user':'environment';
+  if(scanning){stopStream();await startScan();}
 }
 
-// ── Persist URL ────────────────────────
-const urlEl = document.getElementById('gsUrl');
-urlEl.value = localStorage.getItem('gsUrl') || '';
-urlEl.addEventListener('input', e => localStorage.setItem('gsUrl', e.target.value));
+// Persist URL
+const urlEl=document.getElementById('gsUrl');
+urlEl.value=localStorage.getItem('gsUrl')||'';
+urlEl.addEventListener('input',e=>localStorage.setItem('gsUrl',e.target.value));
 
-// ── Check API Availability ─────────────
-if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-  document.getElementById('camStatus').innerHTML = `
-    <div class="cs-icon">❌</div>
-    <div style="color:var(--red)">Yeh browser camera support nahi karta</div>
-    <div style="font-size:11px;margin-top:4px">Chrome ya Firefox use karo, aur HTTPS chahiye</div>`;
+if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){
+  document.getElementById('camStatus').innerHTML=
+    '<div class="cs-icon">❌</div><div style="color:var(--red)">Browser camera support nahi karta<br>Chrome use karo, HTTPS chahiye</div>';
 }
-
-// Auto start on load
-window.addEventListener('load', () => setTimeout(startScan, 800));
+window.addEventListener('load',()=>setTimeout(startScan,800));
 </script>
 </body>
 </html>
